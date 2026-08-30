@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.IO;
-using System.Xml.Serialization;
+using System.Text;
+using System.Globalization;
 
 public class DataRecorder : MonoBehaviour
 {
@@ -25,19 +26,8 @@ public class DataRecorder : MonoBehaviour
     [System.Serializable]
     public class LetterDataset
     {
-        [XmlAttribute("Letter")]
-        public string letter; // Força a serialização como texto "A" em vez de valor numérico/char
-
+        public string letter;
         public List<HandFrameData> capturedFrames = new List<HandFrameData>();
-    }
-
-    [XmlRoot("LibrasDataset")]
-    [System.Serializable]
-    public class DatasetContainer
-    {
-        [XmlArray("Datasets")]
-        [XmlArrayItem("LetterData")]
-        public List<LetterDataset> datasets = new List<LetterDataset>();
     }
 
     [SerializeField] private TextMeshProUGUI statusText;
@@ -45,7 +35,7 @@ public class DataRecorder : MonoBehaviour
     [SerializeField] private float captureDurationSeconds = 10f;
     [SerializeField] private int targetCapturesCount = 100;
     [SerializeField] private char currentLetter = 'A';
-    [SerializeField] private string xmlFileName = "LibrasDataset.xml";
+    [SerializeField] private string csvFileName = "LibrasDataset.csv";
 
     [SerializeField] private List<LetterDataset> recordedData = new List<LetterDataset>();
 
@@ -70,9 +60,10 @@ public class DataRecorder : MonoBehaviour
 
     private void CollectBonesRecursive(Transform parent)
     {
-        if (parent.name.ToLower().Contains("velocity")) return;
-
-        allBones.Add(parent);
+        if (!parent.name.ToLower().Contains("velocity"))
+        {
+            allBones.Add(parent);
+        }
 
         foreach (Transform child in parent)
         {
@@ -107,7 +98,8 @@ public class DataRecorder : MonoBehaviour
 
             HandFrameData frame = new HandFrameData { timeStamp = currentTime };
 
-            foreach (Transform bone in allBones){
+            foreach (Transform bone in allBones)
+            {
                 if (bone == null || bone.name.ToLower().Contains("velocity")) continue;
 
                 frame.bonesData.Add(new BoneTransformData
@@ -125,13 +117,9 @@ public class DataRecorder : MonoBehaviour
 
         int existingIndex = recordedData.FindIndex(d => d.letter == currentLetter.ToString());
         if (existingIndex >= 0)
-        {
             recordedData[existingIndex] = dataset;
-        }
         else
-        {
             recordedData.Add(dataset);
-        }
 
         isRecording = false;
         NextLetter();
@@ -155,34 +143,65 @@ public class DataRecorder : MonoBehaviour
     public void UpdateStatusText()
     {
         if (statusText != null)
-        {
             statusText.text = $"Ready to capture letter {currentLetter}";
-        }
     }
 
-    public void ExportToXML()
+    [ContextMenu("Force Export CSV")]
+    public void ExportToCSV()
     {
-        string projectRoot = Directory.GetParent(Application.dataPath).FullName;
-
-        string targetFolder = Path.Combine(projectRoot, "Data");
-        if (!Directory.Exists(targetFolder))
+        try
         {
-            Directory.CreateDirectory(targetFolder);
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string targetFolder = Path.Combine(projectRoot, "Data");
+
+            if (!Directory.Exists(targetFolder))
+                Directory.CreateDirectory(targetFolder);
+
+            string filePath = Path.Combine(targetFolder, csvFileName);
+
+            StringBuilder sb = new StringBuilder();
+
+            // Cabecalho do CSV
+            sb.AppendLine("Letter,TimeStamp,BoneName,PosX,PosY,PosZ,RotX,RotY,RotZ,RotW");
+
+            // Itera sobre as letras e gravacoes
+            foreach (var dataset in recordedData)
+            {
+                foreach (var frame in dataset.capturedFrames)
+                {
+                    foreach (var bone in frame.bonesData)
+                    {
+                        if (bone.boneName.ToLower().Contains("velocity")) continue;
+
+                        sb.AppendLine(string.Format(
+                            CultureInfo.InvariantCulture,
+                            "{0},{1:F4},{2},{3:F6},{4:F6},{5:F6},{6:F6},{7:F6},{8:F6},{9:F6}",
+                            dataset.letter,
+                            frame.timeStamp,
+                            bone.boneName,
+                            bone.localPosition.x,
+                            bone.localPosition.y,
+                            bone.localPosition.z,
+                            bone.localRotation.x,
+                            bone.localRotation.y,
+                            bone.localRotation.z,
+                            bone.localRotation.w
+                        ));
+                    }
+                }
+            }
+
+            File.WriteAllText(filePath, sb.ToString());
+
+#if UNITY_EDITOR
+            UnityEditor.AssetDatabase.Refresh();
+#endif
+
+            Debug.Log($"<color=green>[DataRecorder] CSV salvo com SUCESSO em:</color> {filePath}");
         }
-
-        string filePath = Path.Combine(targetFolder, xmlFileName);
-
-        DatasetContainer container = new DatasetContainer
+        catch (System.Exception ex)
         {
-            datasets = recordedData
-        };
-
-        XmlSerializer serializer = new XmlSerializer(typeof(DatasetContainer));
-        using (FileStream stream = new FileStream(filePath, FileMode.Create))
-        {
-            serializer.Serialize(stream, container);
+            Debug.LogError($"<color=red>[DataRecorder] ERRO ao salvar CSV:</color> {ex.Message}");
         }
-
-        Debug.Log($"Dados exportados com sucesso para: {filePath}");
     }
 }
