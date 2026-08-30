@@ -204,7 +204,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 2146770042}
         m_TargetAssemblyTypeName: DataRecorder, Assembly-CSharp
-        m_MethodName: ExportToXML
+        m_MethodName: ExportToCSV
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -2584,7 +2584,7 @@ MonoBehaviour:
   captureDurationSeconds: 10
   targetCapturesCount: 150
   currentLetter: 65
-  xmlFileName: LibrasDataset.xml
+  csvFileName: LibrasDataset.csv
   recordedData: []
 --- !u!114 &2146770043
 MonoBehaviour:
