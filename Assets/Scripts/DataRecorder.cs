@@ -60,11 +60,10 @@ public class DataRecorder : MonoBehaviour
 
     private void CollectBonesRecursive(Transform parent)
     {
-        if (!parent.name.ToLower().Contains("velocity"))
+        if (!ShouldIgnoreBone(parent.name))
         {
             allBones.Add(parent);
         }
-
         foreach (Transform child in parent)
         {
             CollectBonesRecursive(child);
@@ -79,6 +78,8 @@ public class DataRecorder : MonoBehaviour
             StartCoroutine(CaptureRoutine());
         }
     }
+
+
 
     private IEnumerator CaptureRoutine()
     {
@@ -100,7 +101,7 @@ public class DataRecorder : MonoBehaviour
 
             foreach (Transform bone in allBones)
             {
-                if (bone == null || bone.name.ToLower().Contains("velocity")) continue;
+                if (bone == null || ShouldIgnoreBone(bone.name)) continue;
 
                 frame.bonesData.Add(new BoneTransformData
                 {
@@ -146,58 +147,91 @@ public class DataRecorder : MonoBehaviour
             statusText.text = $"Ready to capture letter {currentLetter}";
     }
 
+    private bool ShouldIgnoreBone(string boneName)
+    {
+        if (string.IsNullOrEmpty(boneName)) return true;
+        string n = boneName.ToLower();
+        return n.Contains("velocity") || n.Contains("tip");
+    }
+
     [ContextMenu("Force Export CSV")]
     public void ExportToCSV()
     {
         try
         {
             string projectRoot = Directory.GetParent(Application.dataPath).FullName;
-            string targetFolder = Path.Combine(projectRoot, "Data");
-
+            string targetFolder = Path.Combine(projectRoot, "Assets", "Data");
             if (!Directory.Exists(targetFolder))
                 Directory.CreateDirectory(targetFolder);
 
             string filePath = Path.Combine(targetFolder, csvFileName);
 
+            // 1) Ordem canonica dos ossos (estavel, na ordem de 1a aparicao).
+            List<string> boneOrder = new List<string>();
+            HashSet<string> seen = new HashSet<string>();
+            foreach (var dataset in recordedData)
+                foreach (var frame in dataset.capturedFrames)
+                    foreach (var bone in frame.bonesData)
+                    {
+                        if (ShouldIgnoreBone(bone.boneName)) continue;
+                        if (seen.Add(bone.boneName))
+                            boneOrder.Add(bone.boneName);
+                    }
+
             StringBuilder sb = new StringBuilder();
 
-            // Cabecalho do CSV
-            sb.AppendLine("Letter,TimeStamp,BoneName,PosX,PosY,PosZ,RotX,RotY,RotZ,RotW");
+            // 2) Cabecalho: 7 colunas por osso (features) + Letter no FINAL.
+            StringBuilder header = new StringBuilder();
+            for (int i = 0; i < boneOrder.Count; i++)
+            {
+                string b = boneOrder[i].Replace(",", "_");
+                if (i > 0) header.Append(',');
+                header.Append($"{b}_PosX,{b}_PosY,{b}_PosZ,{b}_RotX,{b}_RotY,{b}_RotZ,{b}_RotW");
+            }
+            header.Append(",Letter");
+            sb.AppendLine(header.ToString());
 
-            // Itera sobre as letras e gravacoes
+            // 3) Uma linha por frame: features..., Letter.
             foreach (var dataset in recordedData)
             {
                 foreach (var frame in dataset.capturedFrames)
                 {
+                    Dictionary<string, BoneTransformData> boneMap =
+                        new Dictionary<string, BoneTransformData>();
                     foreach (var bone in frame.bonesData)
                     {
-                        if (bone.boneName.ToLower().Contains("velocity")) continue;
-
-                        sb.AppendLine(string.Format(
-                            CultureInfo.InvariantCulture,
-                            "{0},{1:F4},{2},{3:F6},{4:F6},{5:F6},{6:F6},{7:F6},{8:F6},{9:F6}",
-                            dataset.letter,
-                            frame.timeStamp,
-                            bone.boneName,
-                            bone.localPosition.x,
-                            bone.localPosition.y,
-                            bone.localPosition.z,
-                            bone.localRotation.x,
-                            bone.localRotation.y,
-                            bone.localRotation.z,
-                            bone.localRotation.w
-                        ));
+                        if (ShouldIgnoreBone(bone.boneName)) continue;
+                        boneMap[bone.boneName] = bone;
                     }
+
+                    StringBuilder row = new StringBuilder();
+                    for (int i = 0; i < boneOrder.Count; i++)
+                    {
+                        if (i > 0) row.Append(',');
+                        if (boneMap.TryGetValue(boneOrder[i], out BoneTransformData bone))
+                        {
+                            row.Append(string.Format(CultureInfo.InvariantCulture,
+                                "{0:F6},{1:F6},{2:F6},{3:F6},{4:F6},{5:F6},{6:F6}",
+                                bone.localPosition.x, bone.localPosition.y, bone.localPosition.z,
+                                bone.localRotation.x, bone.localRotation.y,
+                                bone.localRotation.z, bone.localRotation.w));
+                        }
+                        else
+                        {
+                            row.Append(",,,,,,"); // 6 virgulas = 7 campos vazios
+                        }
+                    }
+                    row.Append(',').Append(dataset.letter); // Letter por ultimo
+                    sb.AppendLine(row.ToString());
                 }
             }
 
             File.WriteAllText(filePath, sb.ToString());
-
 #if UNITY_EDITOR
             UnityEditor.AssetDatabase.Refresh();
 #endif
-
-            Debug.Log($"<color=green>[DataRecorder] CSV salvo com SUCESSO em:</color> {filePath}");
+            Debug.Log($"<color=green>[DataRecorder] CSV salvo com SUCESSO em:</color> {filePath} " +
+                      $"({boneOrder.Count} ossos x 7 = {boneOrder.Count * 7} features + 1 label)");
         }
         catch (System.Exception ex)
         {
