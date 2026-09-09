@@ -7,6 +7,8 @@ using System;
 
 public class HandInference : MonoBehaviour
 {
+    private const int EXPECTED_FEATURE_COUNT = 77;
+
     [Header("Configuracoes do Modelo Sentis")]
     [SerializeField] private ModelAsset modelAsset;
 
@@ -16,9 +18,17 @@ public class HandInference : MonoBehaviour
     [SerializeField] private TextMeshProUGUI buttonLabelText;
     [SerializeField] private List<Transform> rootBones = new List<Transform>();
     [SerializeField] private float inferenceInterval = 0.5f;
+    [SerializeField] private float delayToStart = 2f;
+
+    [Header("Regras de Inferência")]
+    [Tooltip("Porcentagem mínima de confiança (0 a 100) para aceitar a predição e exibir a letra.")]
+    [Range(0f, 100f)]
+    [SerializeField] private float minConfidenceThreshold = 70f;
 
     private List<Transform> allBones = new List<Transform>();
-    private float[] inputFeatures;
+    private float[] inputFeatures = new float[EXPECTED_FEATURE_COUNT];
+    private float[] rawCollectedFeatures;
+    
     private string lastLetter = "";
     private bool isTranslating = false;
     private Coroutine inferenceCoroutine;
@@ -26,12 +36,13 @@ public class HandInference : MonoBehaviour
     private Model runtimeModel;
     private Worker worker;
 
-    // Buffers reutilizaveis para evitar o Garbage Collector / Memory Leak
     private float[] logitsBuffer;
     private float[] probsBuffer;
     private HashSet<Transform> visitedBones = new HashSet<Transform>();
 
-    private readonly string[] labels = new string[] {
+    private List<(Transform bone, int componentIndex)> featureMapping = new List<(Transform, int)>();
+
+    private static readonly string[] labels = new string[] {
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
         "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
         "U", "V", "W", "X", "Y", "Z"
@@ -41,7 +52,6 @@ public class HandInference : MonoBehaviour
     {
         InitializeBones();
         InitializeModel();
-
         ClearText();
 
         if (buttonLabelText != null)
@@ -94,6 +104,7 @@ public class HandInference : MonoBehaviour
     {
         allBones.Clear();
         visitedBones.Clear();
+        featureMapping.Clear();
 
         foreach (Transform root in rootBones)
         {
@@ -101,16 +112,29 @@ public class HandInference : MonoBehaviour
                 CollectBonesRecursive(root);
         }
 
-        int totalFeatures = 0;
         foreach (Transform bone in allBones)
         {
             if (bone == null) continue;
+            string cleanBoneName = bone.name.Replace(",", "_");
 
-            bool isWrist = bone.name.ToLower().Contains("wrist");
-            totalFeatures += isWrist ? 4 : 7;
+            for (int c = 0; c < LibrasBoneConfig.ComponentSuffixes.Length; c++)
+            {
+                string colName = $"{cleanBoneName}_{LibrasBoneConfig.ComponentSuffixes[c]}";
+                if (!LibrasBoneConfig.IgnoredColumns.Contains(colName))
+                {
+                    featureMapping.Add((bone, c));
+                }
+            }
         }
 
-        inputFeatures = new float[totalFeatures];
+        rawCollectedFeatures = new float[featureMapping.Count];
+
+        Debug.Log($"[HandInference] Features encontradas na cena: {featureMapping.Count}. O modelo espera: {EXPECTED_FEATURE_COUNT}.");
+
+        if (featureMapping.Count != EXPECTED_FEATURE_COUNT)
+        {
+            Debug.LogWarning($"[HandInference] DIVERGÊNCIA: Cenas montaram {featureMapping.Count} features. O script ajustará automaticamente para as {EXPECTED_FEATURE_COUNT} primeiras!");
+        }
     }
 
     private void CollectBonesRecursive(Transform parent)
@@ -118,23 +142,18 @@ public class HandInference : MonoBehaviour
         if (parent == null || visitedBones.Contains(parent)) return;
         visitedBones.Add(parent);
 
-        if (!ShouldIgnoreBone(parent.name))
+        if (!LibrasBoneConfig.ShouldIgnoreBone(parent.name))
             allBones.Add(parent);
 
         foreach (Transform child in parent)
             CollectBonesRecursive(child);
     }
 
-    private bool ShouldIgnoreBone(string boneName)
-    {
-        if (string.IsNullOrEmpty(boneName)) return true;
-        string n = boneName.ToLower();
-        return n.Contains("velocity") || n.Contains("tip");
-    }
-
     private IEnumerator InferenceRoutine()
     {
-        while (isTranslating){
+        yield return new WaitForSeconds(delayToStart);
+        while (isTranslating)
+        {
             CollectFeatures();
 
             string predictedLetter = Predict();
@@ -152,30 +171,15 @@ public class HandInference : MonoBehaviour
 
     private void CollectFeatures()
     {
-        int index = 0;
-        for (int i = 0; i < allBones.Count; i++)
-        {
-            Transform bone = allBones[i];
-            if (bone == null) continue;
-
-            string boneName = bone.name;
-            Vector3 pos = bone.localPosition;
-            Quaternion rot = bone.localRotation;
-
-            bool isWrist = boneName.ToLower().Contains("wrist");
-
-            if (!isWrist)
-            {
-                inputFeatures[index++] = pos.x;
-                inputFeatures[index++] = pos.y;
-                inputFeatures[index++] = pos.z;
-            }
-
-            inputFeatures[index++] = rot.x;
-            inputFeatures[index++] = rot.y;
-            inputFeatures[index++] = rot.z;
-            inputFeatures[index++] = rot.w;
+        // 1. Coleta tudo que encontrou na cena
+        for (int i = 0; i < featureMapping.Count; i++){
+            var (bone, comp) = featureMapping[i];
+            rawCollectedFeatures[i] = LibrasBoneConfig.GetComponentValue(bone, comp);
         }
+
+        // 2. Trava de segurança: Copia estritamente até 77 posições para o tensor
+        int copyLength = Math.Min(featureMapping.Count, EXPECTED_FEATURE_COUNT);
+        Array.Copy(rawCollectedFeatures, inputFeatures, copyLength);
     }
 
     private string Predict()
@@ -183,31 +187,25 @@ public class HandInference : MonoBehaviour
         if (worker == null)
             return GetDebugRandomLetter();
 
-        // 1. Cria o Tensor temporario descartando os recursos da GPU via 'using'
-        TensorShape shape = new TensorShape(1, 1, inputFeatures.Length);
+        // Shape sempre garantido como (1, 1, 77)
+        TensorShape shape = new TensorShape(1, 1, EXPECTED_FEATURE_COUNT);
         using Tensor<float> inputTensor = new Tensor<float>(shape, inputFeatures);
 
         worker.Schedule(inputTensor);
 
-        // 2. Le a saida do worker sem criar leak de tensor
         Tensor<float> outputTensor = worker.PeekOutput() as Tensor<float>;
         if (outputTensor == null) return "";
 
-        // Copia os dados para o buffer sem instanciar novos objetos no C#
         var readOnlyArray = outputTensor.DownloadToArray();
-        for (int i = 0; i < Math.Min(readOnlyArray.Length, logitsBuffer.Length); i++)
-        {
+        for (int i = 0; i < Math.Min(readOnlyArray.Length, logitsBuffer.Length); i++){
             logitsBuffer[i] = readOnlyArray[i];
         }
 
-        // 3. ArgMax (classe com maior score)
         int predictedClassIndex = 0;
         float maxLogit = float.MinValue;
 
-        for (int i = 0; i < logitsBuffer.Length; i++)
-        {
-            if (logitsBuffer[i] > maxLogit)
-            {
+        for (int i = 0; i < logitsBuffer.Length; i++){
+            if (logitsBuffer[i] > maxLogit){
                 maxLogit = logitsBuffer[i];
                 predictedClassIndex = i;
             }
@@ -217,10 +215,8 @@ public class HandInference : MonoBehaviour
         if (predictedClassIndex < labels.Length)
             predictedClass = labels[predictedClassIndex];
 
-        // 4. Softmax
         float sumExp = 0f;
-        for (int i = 0; i < logitsBuffer.Length; i++)
-        {
+        for (int i = 0; i < logitsBuffer.Length; i++){
             probsBuffer[i] = Mathf.Exp(logitsBuffer[i] - maxLogit);
             sumExp += probsBuffer[i];
         }
@@ -229,6 +225,9 @@ public class HandInference : MonoBehaviour
 
         if (confidenceText != null)
             confidenceText.text = $"Classe: {predictedClass} - {confidence:F1}%";
+
+        if (confidence < minConfidenceThreshold)
+            return "";
 
         return predictedClass;
     }
