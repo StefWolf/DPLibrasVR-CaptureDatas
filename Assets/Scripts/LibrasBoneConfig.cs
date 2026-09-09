@@ -10,6 +10,9 @@ public static class LibrasBoneConfig
     // Colunas constantes/desnecessarias a serem ignoradas.
     public static readonly HashSet<string> IgnoredColumns = new HashSet<string>
     {
+        "R_Wrist_PosX", "R_Wrist_PosY", "R_Wrist_PosZ",
+        //"R_Wrist_RotX", "R_Wrist_RotY", "R_Wrist_RotZ", "R_Wrist_RotW", //COMENTAR // DESCOMENTAR
+
         "R_IndexMetacarpal_RotX", "R_IndexMetacarpal_RotY", "R_IndexMetacarpal_RotZ", "R_IndexMetacarpal_RotW",
         "R_IndexIntermediate_PosX", "R_IndexIntermediate_PosY", "R_IndexIntermediate_PosZ",
         "R_IndexDistal_PosX", "R_IndexDistal_PosY", "R_IndexDistal_PosZ",
