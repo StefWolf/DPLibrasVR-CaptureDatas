@@ -35,6 +35,7 @@ public class DataRecorder : MonoBehaviour
     [SerializeField] private char currentLetter = 'A';
     [SerializeField] private string csvFileName = "LibrasDataset.csv";
     [SerializeField] private List<LetterDataset> recordedData = new List<LetterDataset>();
+    [SerializeField] private int delayToStart = 3;
 
     private List<Transform> allBones = new List<Transform>();
     private bool isRecording = false;
@@ -80,9 +81,15 @@ public class DataRecorder : MonoBehaviour
         }
     }
 
-    private IEnumerator CaptureRoutine()
-    {
+    private IEnumerator CaptureRoutine(){
         isRecording = true;
+
+        for (int i = delayToStart; i > 0; i--){
+            if (statusText != null)
+                statusText.text = $"Gravando em {i}..."; 
+            yield return new WaitForSeconds(1f);
+        }
+
         int validCaptures = Mathf.Max(1, targetCapturesCount);
         float intervalInSeconds = captureDurationSeconds / validCaptures;
         LetterDataset dataset = new LetterDataset { letter = currentLetter.ToString() };
@@ -92,14 +99,22 @@ public class DataRecorder : MonoBehaviour
             if (statusText != null)
                 statusText.text = $"Capturing letter {currentLetter}... ({i + 1}/{validCaptures})";
             HandFrameData frame = new HandFrameData { timeStamp = currentTime };
+            Transform wristTransform = rootBones[0];
             foreach (Transform bone in allBones)
             {
                 if (bone == null || LibrasBoneConfig.ShouldIgnoreBone(bone.name)) continue;
+
+                Vector3 relativePos = wristTransform.InverseTransformPoint(bone.position);
+                Quaternion relativeRot = Quaternion.Inverse(wristTransform.rotation) * bone.rotation;
+
+                if (bone == wristTransform)
+                    relativeRot = LibrasBoneConfig.ExtractSwing(relativeRot, Vector3.forward);
+
                 frame.bonesData.Add(new BoneTransformData
                 {
                     boneName = bone.name,
-                    localPosition = bone.localPosition,
-                    localRotation = bone.localRotation
+                    localPosition = relativePos,
+                    localRotation = relativeRot
                 });
             }
             dataset.capturedFrames.Add(frame);
