@@ -22,8 +22,8 @@ public class HandInference : MonoBehaviour
     [SerializeField] private float delayToStart = 2f;
 
 
-    [Header("Regras de Inferência")]
-    [Tooltip("Porcentagem mínima de confiança (0 a 100) para aceitar a predição e exibir a letra.")]
+    [Header("Regras de Inferï¿½ncia")]
+    [Tooltip("Porcentagem mï¿½nima de confianï¿½a (0 a 100) para aceitar a prediï¿½ï¿½o e exibir a letra.")]
     [Range(0f, 100f)]
     [SerializeField] private float minConfidenceThreshold = 70f;
 
@@ -59,14 +59,14 @@ public class HandInference : MonoBehaviour
 
     private static readonly string[] labels = new string[] {
         "A", "B"
-        //, "C", "D", "E", "F", "G", "I", "L", "M",
-        //"N", "O", "P", "Q", "R", "S", "T", "U", "V"
+        , "C", "D",// "E", "F", "G", "I", "L", "M",
+       // "N", "O", "P", "Q", "R", "S", "T", "U", "V"
     };
 
     private void Start()
     {
         // O modelo precisa ser carregado ANTES de montar o mapeamento de features,
-        // pois é dele que tiramos a quantidade esperada (nao existe mais numero fixo).
+        // pois ï¿½ dele que tiramos a quantidade esperada (nao existe mais numero fixo).
         InitializeModel();
         InitializeBones();
         LogFeatureComparison();
@@ -104,7 +104,7 @@ public class HandInference : MonoBehaviour
 
     /// <summary>
     /// Le a shape do primeiro input do modelo (ex.: 1x1x77) e retorna o tamanho
-    /// da ultima dimensao, que é o numero de features que o modelo espera.
+    /// da ultima dimensao, que ï¿½ o numero de features que o modelo espera.
     /// Substitui o antigo "magic number" fixo (77).
     /// </summary>
     private int GetExpectedFeatureCountFromModel(Model model)
@@ -130,7 +130,7 @@ public class HandInference : MonoBehaviour
 
         if (lastDimValue < 0)
         {
-            Debug.LogError("[HandInference] A ultima dimensao do input do modelo é dinamica (sem valor fixo). " +
+            Debug.LogError("[HandInference] A ultima dimensao do input do modelo ï¿½ dinamica (sem valor fixo). " +
                             "Verifique como o modelo foi exportado (o input deveria terminar em um numero fixo de features).");
             return 0;
         }
@@ -192,7 +192,7 @@ public class HandInference : MonoBehaviour
 
         if (featureMapping.Count != expectedFeatureCount)
         {
-            Debug.LogWarning($"[HandInference] DIVERGÊNCIA: Cena montou {featureMapping.Count} features. O script ajustará automaticamente para as {expectedFeatureCount} primeiras!");
+            Debug.LogWarning($"[HandInference] DIVERGï¿½NCIA: Cena montou {featureMapping.Count} features. O script ajustarï¿½ automaticamente para as {expectedFeatureCount} primeiras!");
         }
     }
 
@@ -418,7 +418,7 @@ public class HandInference : MonoBehaviour
         }
     }
 
-    // Método auxiliar para ler componentes do Quaternion de forma segura
+    // Mï¿½todo auxiliar para ler componentes do Quaternion de forma segura
     private float GetQuaternionComponent(Quaternion q, int rotComp)
     {
         return rotComp switch
@@ -451,7 +451,7 @@ public class HandInference : MonoBehaviour
             logitsBuffer[i] = readOnlyArray[i];
         }
 
-        // Estabilidade numérica do Softmax
+        // Estabilidade numï¿½rica do Softmax
         float maxLogit = float.MinValue;
         for (int i = 0; i < labels.Length; i++)
         {

@@ -1602,7 +1602,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ab109ceeac776a4cb199c6af0acf26b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  modelAsset: {fileID: 5022602860645237092, guid: 216f266fda98230418580009f75de88f, type: 3}
+  modelAsset: {fileID: 5022602860645237092, guid: b7eda3706170d4d4c8a03a1dbb979f48, type: 3}
   resultText: {fileID: 1686876262}
   confidenceText: {fileID: 1560407761}
   buttonLabelText: {fileID: 1324720500}
