@@ -70,4 +70,17 @@ public static class LibrasBoneConfig
             default: return 0f;
         }
     }
+
+    public static Quaternion ExtractSwing(Quaternion rot, Vector3 twistAxis)
+    {
+        // Extrai a rotação de torção (twist) ao longo do eixo especificado (ex: Vector3.forward ou up)
+        Vector3 r = new Vector3(rot.x, rot.y, rot.z);
+        Vector3 p = Vector3.Project(r, twistAxis);
+        Quaternion twist = new Quaternion(p.x, p.y, p.z, rot.w);
+        twist.Normalize();
+
+        // O swing é o que sobra da rotação total menos a torção
+        Quaternion swing = rot * Quaternion.Inverse(twist);
+        return swing;
+    }
 }
