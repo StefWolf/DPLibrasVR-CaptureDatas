@@ -1602,7 +1602,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ab109ceeac776a4cb199c6af0acf26b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  modelAsset: {fileID: 5022602860645237092, guid: b7eda3706170d4d4c8a03a1dbb979f48, type: 3}
+  modelAsset: {fileID: 5022602860645237092, guid: 25baab33b739aca4595b6cde3f708201, type: 3}
   resultText: {fileID: 1686876262}
   confidenceText: {fileID: 1560407761}
   buttonLabelText: {fileID: 1324720500}
@@ -2106,6 +2106,7 @@ GameObject:
   - component: {fileID: 799296918}
   - component: {fileID: 799296917}
   - component: {fileID: 799296920}
+  - component: {fileID: 799296921}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -2198,6 +2199,21 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RaycastTriggerInteraction: 0
+--- !u!114 &799296921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 799296915}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c17fb11e6237dc34096c1630d4a4c5cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Camera2Follow: {fileID: 1606504567}
+  CameraDistance: 1
+  smoothTime: 0.3
 --- !u!1 &811481826
 GameObject:
   m_ObjectHideFlags: 0
